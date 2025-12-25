@@ -74,7 +74,7 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private bool _isHistoryPanelOpen;
 
-    public MainViewModelV2()
+    public MainViewModel()
     {
         _smartCardService = new SmartCardService();
         _thaiIDCardService = new ThaiIDCardService(_smartCardService);
@@ -564,6 +564,41 @@ public partial class MainViewModel : ObservableObject
         catch
         {
             return null;
+        }
+    }
+
+    /// <summary>
+    /// Open Card Editor Window (Government Use Only)
+    /// </summary>
+    [RelayCommand]
+    private void OpenCardEditor()
+    {
+        try
+        {
+            // Warning dialog
+            var result = MessageBox.Show(
+                "⚠️ หน้าต่างนี้สำหรับเจ้าหน้าที่ราชการเท่านั้น\n\n" +
+                "การแก้ไขข้อมูลบัตรประชาชนต้องได้รับอนุญาตจากหน่วยงานที่เกี่ยวข้อง\n" +
+                "ต้องมี Admin PIN และระบุเหตุผลในการแก้ไขทุกครั้ง\n" +
+                "ระบบจะบันทึก Audit Log ทุกการแก้ไข\n\n" +
+                "คุณมีอำนาจในการแก้ไขข้อมูลหรือไม่?",
+                "ยืนยันสิทธิ์",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning
+            );
+
+            if (result == MessageBoxResult.Yes)
+            {
+                var editorWindow = new Views.CardEditorWindow(_smartCardService, SelectedReader);
+                editorWindow.ShowDialog();
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"ไม่สามารถเปิดหน้าต่างแก้ไขได้:\n{ex.Message}",
+                "ข้อผิดพลาด",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
         }
     }
 
