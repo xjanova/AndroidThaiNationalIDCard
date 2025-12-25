@@ -1,13 +1,10 @@
 using System;
 using System.Collections.ObjectModel;
-using System.IO;
-using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Microsoft.Win32;
 using ThaiIDCardReader.Models;
 using ThaiIDCardReader.Services;
 
@@ -17,8 +14,6 @@ public partial class MainViewModel : ObservableObject
 {
     private readonly SmartCardService _smartCardService;
     private readonly ThaiIDCardService _thaiIDCardService;
-    private readonly ExcelService _excelService;
-    private readonly HistoryService _historyService;
 
     [ObservableProperty]
     private PersonalInformation? _personalInformation;
@@ -42,12 +37,6 @@ public partial class MainViewModel : ObservableObject
     private ObservableCollection<string> _availableReaders = new();
 
     [ObservableProperty]
-    private ObservableCollection<CardHistory> _historyList = new();
-
-    [ObservableProperty]
-    private CardHistory? _selectedHistory;
-
-    [ObservableProperty]
     private bool _isPinDialogOpen;
 
     [ObservableProperty]
@@ -59,34 +48,21 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private int _remainingPinAttempts;
 
-    [ObservableProperty]
-    private bool _autoSaveToExcel = true;
-
-    [ObservableProperty]
-    private int _totalRecords;
-
-    [ObservableProperty]
-    private int _uniqueCards;
-
-    [ObservableProperty]
-    private DateTime? _lastReadDate;
-
-    [ObservableProperty]
-    private bool _isHistoryPanelOpen;
-
-    public MainViewModelV2()
+    public MainViewModel()
     {
         _smartCardService = new SmartCardService();
         _thaiIDCardService = new ThaiIDCardService(_smartCardService);
-        _excelService = new ExcelService();
-        _historyService = new HistoryService(_excelService);
 
         // Subscribe to card events
         _smartCardService.CardInserted += OnCardInserted;
         _smartCardService.CardRemoved += OnCardRemoved;
+        _smartCardService.ReaderConnected += OnReaderConnected;
+        _smartCardService.ReaderDisconnected += OnReaderDisconnected;
+    }
 
-        LoadHistory();
-        UpdateStatistics();
+    partial void OnSelectedReaderChanged(string? value)
+    {
+        CheckCardStatus();
     }
 
     [RelayCommand]
@@ -112,6 +88,8 @@ public partial class MainViewModel : ObservableObject
                     {
                         SelectedReader = AvailableReaders[0];
                         StatusMessage = $"พบเครื่องอ่านบัตร {AvailableReaders.Count} เครื่อง";
+
+                        // Start monitoring
                         _smartCardService.StartMonitoring(SelectedReader);
                     }
                     else
@@ -141,6 +119,7 @@ public partial class MainViewModel : ObservableObject
 
             await Task.Run(() =>
             {
+                // Read personal information
                 var personalInfo = _thaiIDCardService.ReadPersonalInformation(SelectedReader);
 
                 Application.Current.Dispatcher.Invoke(() =>
@@ -149,12 +128,6 @@ public partial class MainViewModel : ObservableObject
                     {
                         PersonalInformation = personalInfo;
                         StatusMessage = "อ่านข้อมูลสำเร็จ";
-
-                        // Auto-save to Excel if enabled
-                        if (AutoSaveToExcel)
-                        {
-                            SaveToHistory();
-                        }
                     }
                     else
                     {
@@ -219,199 +192,6 @@ public partial class MainViewModel : ObservableObject
         {
             await ReadPhotoAsync();
         }
-    }
-
-    [RelayCommand]
-    private void SaveToHistory()
-    {
-        if (PersonalInformation == null) return;
-
-        try
-        {
-            byte[]? photoBytes = null;
-            if (PhotoImage != null)
-            {
-                photoBytes = ImageToBytes(PhotoImage);
-            }
-
-            var history = CardHistory.FromPersonalInfo(
-                PersonalInformation,
-                photoBytes,
-                SelectedReader
-            );
-
-            _historyService.AddHistory(history);
-            LoadHistory();
-            UpdateStatistics();
-
-            StatusMessage = "บันทึกลง Excel เรียบร้อย";
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"ไม่สามารถบันทึกได้: {ex.Message}";
-        }
-    }
-
-    [RelayCommand]
-    private void LoadHistory()
-    {
-        try
-        {
-            var history = _historyService.GetAllHistory();
-            Application.Current.Dispatcher.Invoke(() =>
-            {
-                HistoryList.Clear();
-                foreach (var item in history)
-                {
-                    HistoryList.Add(item);
-                }
-            });
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"ไม่สามารถโหลดประวัติได้: {ex.Message}";
-        }
-    }
-
-    [RelayCommand]
-    private void ViewHistory(CardHistory? history)
-    {
-        if (history == null) return;
-
-        PersonalInformation = history.ToPersonalInfo();
-
-        if (history.PhotoData != null && history.PhotoData.Length > 0)
-        {
-            PhotoImage = BytesToImage(history.PhotoData);
-        }
-
-        StatusMessage = $"แสดงข้อมูลจากประวัติ: {history.ReadDateTime:yyyy-MM-dd HH:mm}";
-    }
-
-    [RelayCommand]
-    private async Task ExportExcelAsync()
-    {
-        try
-        {
-            var dialog = new SaveFileDialog
-            {
-                Filter = "Excel Files (*.xlsx)|*.xlsx|All Files (*.*)|*.*",
-                FileName = $"ThaiIDCard_Export_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx",
-                DefaultExt = ".xlsx"
-            };
-
-            if (dialog.ShowDialog() == true)
-            {
-                IsReading = true;
-                StatusMessage = "กำลัง Export...";
-
-                await Task.Run(() =>
-                {
-                    _historyService.ExportToFile(dialog.FileName);
-                });
-
-                StatusMessage = $"Export สำเร็จ: {Path.GetFileName(dialog.FileName)}";
-                MessageBox.Show($"Export สำเร็จ!\n{dialog.FileName}", "สำเร็จ",
-                    MessageBoxButton.OK, MessageBoxImage.Information);
-            }
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"Export ไม่สำเร็จ: {ex.Message}";
-            MessageBox.Show($"เกิดข้อผิดพลาด:\n{ex.Message}", "ผิดพลาด",
-                MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-        finally
-        {
-            IsReading = false;
-        }
-    }
-
-    [RelayCommand]
-    private async Task ImportExcelAsync()
-    {
-        try
-        {
-            var dialog = new OpenFileDialog
-            {
-                Filter = "Excel Files (*.xlsx)|*.xlsx|All Files (*.*)|*.*",
-                DefaultExt = ".xlsx"
-            };
-
-            if (dialog.ShowDialog() == true)
-            {
-                IsReading = true;
-                StatusMessage = "กำลัง Import...";
-
-                await Task.Run(() =>
-                {
-                    _historyService.ImportFromFile(dialog.FileName);
-                });
-
-                LoadHistory();
-                UpdateStatistics();
-                StatusMessage = "Import สำเร็จ";
-                MessageBox.Show("Import สำเร็จ!", "สำเร็จ",
-                    MessageBoxButton.OK, MessageBoxImage.Information);
-            }
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"Import ไม่สำเร็จ: {ex.Message}";
-            MessageBox.Show($"เกิดข้อผิดพลาด:\n{ex.Message}", "ผิดพลาด",
-                MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-        finally
-        {
-            IsReading = false;
-        }
-    }
-
-    [RelayCommand]
-    private void OpenExcelFile()
-    {
-        try
-        {
-            var excelPath = _excelService.GetDefaultExcelPath();
-            if (File.Exists(excelPath))
-            {
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = excelPath,
-                    UseShellExecute = true
-                });
-                StatusMessage = "เปิดไฟล์ Excel";
-            }
-            else
-            {
-                MessageBox.Show("ยังไม่มีไฟล์ Excel\nกรุณาอ่านบัตรอย่างน้อย 1 ครั้ง", "แจ้งเตือน",
-                    MessageBoxButton.OK, MessageBoxImage.Information);
-            }
-        }
-        catch (Exception ex)
-        {
-            StatusMessage = $"ไม่สามารถเปิดไฟล์ได้: {ex.Message}";
-        }
-    }
-
-    [RelayCommand]
-    private void ToggleHistoryPanel()
-    {
-        IsHistoryPanelOpen = !IsHistoryPanelOpen;
-    }
-
-    [RelayCommand]
-    private void ClearData()
-    {
-        PersonalInformation = null;
-        PhotoImage = null;
-        StatusMessage = "ล้างข้อมูลเรียบร้อย";
-    }
-
-    [RelayCommand]
-    private void Refresh()
-    {
-        _ = InitializeAsync();
     }
 
     [RelayCommand]
@@ -480,12 +260,18 @@ public partial class MainViewModel : ObservableObject
         PinInput = string.Empty;
     }
 
-    private void UpdateStatistics()
+    [RelayCommand]
+    private void ClearData()
     {
-        var stats = _historyService.GetStatistics();
-        TotalRecords = stats.TotalRecords;
-        UniqueCards = stats.UniqueCards;
-        LastReadDate = stats.LastRead;
+        PersonalInformation = null;
+        PhotoImage = null;
+        StatusMessage = "ล้างข้อมูลเรียบร้อย";
+    }
+
+    [RelayCommand]
+    private void Refresh()
+    {
+        _ = InitializeAsync();
     }
 
     private void CheckCardStatus()
@@ -527,44 +313,21 @@ public partial class MainViewModel : ObservableObject
         });
     }
 
-    private byte[]? ImageToBytes(BitmapImage? image)
+    private void OnReaderConnected(object? sender, string readerName)
     {
-        if (image == null) return null;
-
-        try
+        Application.Current.Dispatcher.Invoke(() =>
         {
-            var encoder = new JpegBitmapEncoder();
-            encoder.Frames.Add(BitmapFrame.Create(image));
-
-            using var stream = new MemoryStream();
-            encoder.Save(stream);
-            return stream.ToArray();
-        }
-        catch
-        {
-            return null;
-        }
+            StatusMessage = $"เครื่องอ่านบัตรเชื่อมต่อ: {readerName}";
+            _ = InitializeAsync();
+        });
     }
 
-    private BitmapImage? BytesToImage(byte[] bytes)
+    private void OnReaderDisconnected(object? sender, string readerName)
     {
-        if (bytes == null || bytes.Length == 0) return null;
-
-        try
+        Application.Current.Dispatcher.Invoke(() =>
         {
-            using var stream = new MemoryStream(bytes);
-            var image = new BitmapImage();
-            image.BeginInit();
-            image.StreamSource = stream;
-            image.CacheOption = BitmapCacheOption.OnLoad;
-            image.EndInit();
-            image.Freeze();
-            return image;
-        }
-        catch
-        {
-            return null;
-        }
+            StatusMessage = $"เครื่องอ่านบัตรถูกถอด: {readerName}";
+        });
     }
 
     public void Cleanup()

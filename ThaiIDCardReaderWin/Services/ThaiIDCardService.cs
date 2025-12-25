@@ -495,4 +495,107 @@ public class ThaiIDCardService
     }
 
     #endregion
+
+    #region Write Operations (Experimental - May Not Be Supported)
+
+    /// <summary>
+    /// WARNING: Thai National ID cards are typically READ-ONLY.
+    /// This feature is experimental and may not work with most cards.
+    /// Writing to card requires:
+    /// 1. Card must support write operations
+    /// 2. Must have verified PIN with admin/write privileges
+    /// 3. Reader device must support write commands
+    /// </summary>
+    public enum WriteResult
+    {
+        Success,
+        NotSupported,
+        NoPermission,
+        WriteFailed,
+        Error
+    }
+
+    /// <summary>
+    /// Attempt to write notes/memo to card (if supported)
+    /// WARNING: Most Thai ID cards do NOT support writing
+    /// </summary>
+    public WriteResult WriteNotesToCard(string notes, string? readerName = null)
+    {
+        using var reader = _smartCardService.ConnectToCard(readerName);
+        if (reader == null)
+            return WriteResult.Error;
+
+        try
+        {
+            // This is a theoretical implementation
+            // Real Thai ID cards typically don't support writing user data
+
+            System.Diagnostics.Debug.WriteLine("WARNING: Write operation attempted on Thai ID card");
+            System.Diagnostics.Debug.WriteLine("Most Thai ID cards are READ-ONLY and will reject this operation");
+
+            // Attempt to select a writable applet (unlikely to succeed)
+            if (!SelectAppletExtension(reader))
+            {
+                return WriteResult.NotSupported;
+            }
+
+            // Try to write data (this will likely fail with permission error)
+            byte[] notesBytes = System.Text.Encoding.UTF8.GetBytes(notes);
+            if (notesBytes.Length > 255)
+            {
+                notesBytes = notesBytes.Take(255).ToArray();
+            }
+
+            var writeCommand = new CommandApdu(IsoCase.Case3Short, SCardProtocol.Any)
+            {
+                CLA = 0x00,
+                INS = 0xD6, // UPDATE BINARY command
+                P1 = 0x00,
+                P2 = 0x00,
+                Data = notesBytes
+            };
+
+            var response = reader.Transmit(writeCommand);
+
+            if (response.SW1 == 0x90 && response.SW2 == 0x00)
+            {
+                return WriteResult.Success;
+            }
+            else if (response.SW1 == 0x69 && response.SW2 == 0x82)
+            {
+                // Security status not satisfied (no permission)
+                return WriteResult.NoPermission;
+            }
+            else if (response.SW1 == 0x6D && response.SW2 == 0x00)
+            {
+                // Instruction not supported
+                return WriteResult.NotSupported;
+            }
+            else
+            {
+                return WriteResult.WriteFailed;
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error writing to card: {ex.Message}");
+            return WriteResult.Error;
+        }
+    }
+
+    /// <summary>
+    /// Check if card supports write operations
+    /// </summary>
+    public bool SupportsWriteOperations(string? readerName = null)
+    {
+        // Thai National ID cards typically do NOT support write operations
+        // This method returns false by default
+
+        System.Diagnostics.Debug.WriteLine("Thai National ID cards are READ-ONLY by design");
+        System.Diagnostics.Debug.WriteLine("Write operations are not supported for security reasons");
+
+        return false;
+    }
+
+    #endregion
 }
