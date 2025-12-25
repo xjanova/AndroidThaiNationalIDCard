@@ -1,0 +1,396 @@
+<ui:Window x:Class="ThaiIDCardReader.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.modernwpf.com/2019"
+        xmlns:vm="clr-namespace:ThaiIDCardReader.ViewModels"
+        Title="โปรแกรมอ่านบัตรประชาชนไทย"
+        Height="800" Width="1200"
+        MinHeight="600" MinWidth="900"
+        WindowStartupLocation="CenterScreen"
+        ui:WindowHelper.UseModernWindowStyle="True">
+
+    <Window.DataContext>
+        <vm:MainViewModel />
+    </Window.DataContext>
+
+    <Window.Resources>
+        <!-- Converters -->
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+
+        <!-- Styles -->
+        <Style x:Key="CardStyle" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource SystemControlAcrylicElementBrush}"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="16"/>
+            <Setter Property="Margin" Value="0,0,0,12"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource SystemControlForegroundBaseLowBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
+
+        <Style x:Key="TitleTextStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Margin" Value="0,0,0,12"/>
+            <Setter Property="Foreground" Value="{DynamicResource SystemControlForegroundBaseHighBrush}"/>
+        </Style>
+
+        <Style x:Key="LabelTextStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Foreground" Value="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
+            <Setter Property="Margin" Value="0,4,8,4"/>
+        </Style>
+
+        <Style x:Key="ValueTextStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="Normal"/>
+            <Setter Property="Margin" Value="0,4,0,4"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Border Grid.Row="0" Background="{DynamicResource SystemControlAccentAcrylicElementAccentMediumHighBrush}"
+                Padding="24,16">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="โปรแกรมอ่านบัตรประชาชนไทย"
+                               FontSize="24"
+                               FontWeight="Bold"
+                               Foreground="White"/>
+                    <TextBlock Text="Thai National ID Card Reader for Windows 11"
+                               FontSize="13"
+                               Foreground="#E0FFFFFF"
+                               Margin="0,4,0,0"/>
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <ui:ProgressRing IsActive="{Binding IsReading}"
+                                   Width="24" Height="24"
+                                   Margin="0,0,12,0"
+                                   Foreground="White"/>
+                    <Button Content="รีเฟรช"
+                            Command="{Binding RefreshCommand}"
+                            Style="{StaticResource AccentButtonStyle}"
+                            Margin="0,0,8,0"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Main Content -->
+        <ScrollViewer Grid.Row="1"
+                     VerticalScrollBarVisibility="Auto"
+                     Padding="24">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="2*"/>
+                    <ColumnDefinition Width="20"/>
+                    <ColumnDefinition Width="1*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Left Panel - Card Data -->
+                <StackPanel Grid.Column="0">
+                    <!-- Reader Selection Card -->
+                    <Border Style="{StaticResource CardStyle}">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Grid.Row="0"
+                                     Text="🔌 เครื่องอ่านบัตร"
+                                     Style="{StaticResource TitleTextStyle}"/>
+
+                            <ComboBox Grid.Row="1"
+                                    ItemsSource="{Binding AvailableReaders}"
+                                    SelectedItem="{Binding SelectedReader}"
+                                    DisplayMemberPath="."
+                                    Margin="0,0,0,12"
+                                    HorizontalAlignment="Stretch"/>
+
+                            <Grid Grid.Row="2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <Border Grid.Column="0"
+                                      Width="12" Height="12"
+                                      CornerRadius="6"
+                                      Margin="0,0,8,0"
+                                      VerticalAlignment="Center">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Background" Value="#FF6B6B"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsCardInserted}" Value="True">
+                                                    <Setter Property="Background" Value="#51CF66"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                </Border>
+
+                                <TextBlock Grid.Column="1"
+                                         Text="{Binding StatusMessage}"
+                                         VerticalAlignment="Center"
+                                         FontSize="13"/>
+                            </Grid>
+                        </Grid>
+                    </Border>
+
+                    <!-- Action Buttons Card -->
+                    <Border Style="{StaticResource CardStyle}">
+                        <UniformGrid Rows="1" Columns="4">
+                            <Button Content="📖 อ่านข้อมูล"
+                                  Command="{Binding ReadCardCommand}"
+                                  IsEnabled="{Binding IsCardInserted}"
+                                  Style="{StaticResource AccentButtonStyle}"
+                                  Margin="0,0,8,0"
+                                  Padding="16,12"/>
+
+                            <Button Content="🖼️ อ่านรูป"
+                                  Command="{Binding ReadPhotoCommand}"
+                                  IsEnabled="{Binding IsCardInserted}"
+                                  Margin="0,0,8,0"
+                                  Padding="16,12"/>
+
+                            <Button Content="📋 อ่านทั้งหมด"
+                                  Command="{Binding ReadAllCommand}"
+                                  IsEnabled="{Binding IsCardInserted}"
+                                  Margin="0,0,8,0"
+                                  Padding="16,12"/>
+
+                            <Button Content="🔑 ยืนยัน PIN"
+                                  Command="{Binding OpenPinDialogCommand}"
+                                  IsEnabled="{Binding IsCardInserted}"
+                                  Padding="16,12"/>
+                        </UniformGrid>
+                    </Border>
+
+                    <!-- Personal Information Card -->
+                    <Border Style="{StaticResource CardStyle}"
+                          Visibility="{Binding PersonalInformation, Converter={StaticResource BoolToVis}}">
+                        <StackPanel>
+                            <TextBlock Text="👤 ข้อมูลส่วนบุคคล"
+                                     Style="{StaticResource TitleTextStyle}"/>
+
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="150"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <!-- Personal ID -->
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="เลขบัตรประชาชน:" Style="{StaticResource LabelTextStyle}"/>
+                                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding PersonalInformation.PersonalID}"
+                                         Style="{StaticResource ValueTextStyle}" FontWeight="SemiBold" FontSize="14"/>
+
+                                <!-- Name TH -->
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="ชื่อภาษาไทย:" Style="{StaticResource LabelTextStyle}"/>
+                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding PersonalInformation.NameTH}"
+                                         Style="{StaticResource ValueTextStyle}"/>
+
+                                <!-- Name EN -->
+                                <TextBlock Grid.Row="2" Grid.Column="0" Text="ชื่อภาษาอังกฤษ:" Style="{StaticResource LabelTextStyle}"/>
+                                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding PersonalInformation.NameEN}"
+                                         Style="{StaticResource ValueTextStyle}"/>
+
+                                <!-- Birth Date -->
+                                <TextBlock Grid.Row="3" Grid.Column="0" Text="วันเกิด:" Style="{StaticResource LabelTextStyle}"/>
+                                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding PersonalInformation.FormattedBirthDate}"
+                                         Style="{StaticResource ValueTextStyle}"/>
+
+                                <!-- Address -->
+                                <TextBlock Grid.Row="4" Grid.Column="0" Text="ที่อยู่:" Style="{StaticResource LabelTextStyle}" VerticalAlignment="Top"/>
+                                <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding PersonalInformation.Address}"
+                                         Style="{StaticResource ValueTextStyle}"/>
+
+                                <!-- Issuer -->
+                                <TextBlock Grid.Row="5" Grid.Column="0" Text="ผู้ออกบัตร:" Style="{StaticResource LabelTextStyle}"/>
+                                <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding PersonalInformation.Issuer}"
+                                         Style="{StaticResource ValueTextStyle}"/>
+
+                                <!-- Issuer Code -->
+                                <TextBlock Grid.Row="6" Grid.Column="0" Text="รหัสผู้ออกบัตร:" Style="{StaticResource LabelTextStyle}"/>
+                                <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding PersonalInformation.IssuerCode}"
+                                         Style="{StaticResource ValueTextStyle}"/>
+
+                                <!-- Issue Date -->
+                                <TextBlock Grid.Row="7" Grid.Column="0" Text="วันออกบัตร:" Style="{StaticResource LabelTextStyle}"/>
+                                <TextBlock Grid.Row="7" Grid.Column="1" Text="{Binding PersonalInformation.FormattedIssueDate}"
+                                         Style="{StaticResource ValueTextStyle}"/>
+
+                                <!-- Expire Date -->
+                                <TextBlock Grid.Row="8" Grid.Column="0" Text="วันหมดอายุ:" Style="{StaticResource LabelTextStyle}"/>
+                                <TextBlock Grid.Row="8" Grid.Column="1" Text="{Binding PersonalInformation.FormattedExpireDate}"
+                                         Style="{StaticResource ValueTextStyle}"/>
+
+                                <!-- Card Info -->
+                                <TextBlock Grid.Row="9" Grid.Column="0" Text="ข้อมูลการ์ด:" Style="{StaticResource LabelTextStyle}"/>
+                                <TextBlock Grid.Row="9" Grid.Column="1" Text="{Binding PersonalInformation.CardInfo}"
+                                         Style="{StaticResource ValueTextStyle}" FontFamily="Consolas"/>
+                            </Grid>
+
+                            <Button Content="🗑️ ล้างข้อมูล"
+                                  Command="{Binding ClearDataCommand}"
+                                  HorizontalAlignment="Right"
+                                  Margin="0,12,0,0"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- Right Panel - Photo -->
+                <StackPanel Grid.Column="2">
+                    <Border Style="{StaticResource CardStyle}">
+                        <StackPanel>
+                            <TextBlock Text="📷 รูปถ่าย"
+                                     Style="{StaticResource TitleTextStyle}"/>
+
+                            <Border BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
+                                  BorderThickness="1"
+                                  CornerRadius="4"
+                                  Background="{DynamicResource SystemControlPageBackgroundAltHighBrush}">
+                                <Grid>
+                                    <!-- Placeholder when no photo -->
+                                    <TextBlock Text="ยังไม่มีรูปภาพ&#x0a;กดปุ่ม 'อ่านรูป' เพื่ออ่านรูปภาพจากบัตร"
+                                             TextAlignment="Center"
+                                             VerticalAlignment="Center"
+                                             HorizontalAlignment="Center"
+                                             Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"
+                                             Padding="40"
+                                             Visibility="{Binding PhotoImage, Converter={StaticResource BoolToVis}, ConverterParameter=Inverse}"/>
+
+                                    <!-- Photo Image -->
+                                    <Image Source="{Binding PhotoImage}"
+                                         Stretch="Uniform"
+                                         MaxHeight="400"
+                                         Visibility="{Binding PhotoImage, Converter={StaticResource BoolToVis}}"/>
+                                </Grid>
+                            </Border>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Info Card -->
+                    <Border Style="{StaticResource CardStyle}">
+                        <StackPanel>
+                            <TextBlock Text="ℹ️ คำแนะนำ"
+                                     Style="{StaticResource TitleTextStyle}"/>
+                            <TextBlock TextWrapping="Wrap" FontSize="12" LineHeight="20">
+                                <Run Text="1. เชื่อมต่อเครื่องอ่านบัตรกับคอมพิวเตอร์"/>
+                                <LineBreak/>
+                                <Run Text="2. ใส่บัตรประชาชนชิปลงในเครื่องอ่าน"/>
+                                <LineBreak/>
+                                <Run Text="3. กดปุ่ม 'อ่านทั้งหมด' เพื่ออ่านข้อมูล"/>
+                                <LineBreak/>
+                                <Run Text="4. สามารถยืนยัน PIN ได้หลังใส่บัตร"/>
+                            </TextBlock>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </ScrollViewer>
+
+        <!-- Footer Status Bar -->
+        <Border Grid.Row="2"
+                Background="{DynamicResource SystemControlBackgroundAltHighBrush}"
+                BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
+                BorderThickness="0,1,0,0"
+                Padding="24,12">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0"
+                         Text="{Binding StatusMessage}"
+                         VerticalAlignment="Center"
+                         FontSize="12"/>
+
+                <TextBlock Grid.Column="1"
+                         Text="Thai ID Card Reader v1.0.0 | Made with ❤️ for Thailand"
+                         VerticalAlignment="Center"
+                         FontSize="11"
+                         Foreground="{DynamicResource SystemControlForegroundBaseMediumBrush}"/>
+            </Grid>
+        </Border>
+
+        <!-- PIN Dialog -->
+        <Grid Grid.RowSpan="3"
+              Background="#80000000"
+              Visibility="{Binding IsPinDialogOpen, Converter={StaticResource BoolToVis}}">
+            <Border Background="{DynamicResource SystemControlAcrylicWindowBrush}"
+                    CornerRadius="8"
+                    Padding="32"
+                    MaxWidth="400"
+                    VerticalAlignment="Center"
+                    HorizontalAlignment="Center"
+                    BorderBrush="{DynamicResource SystemControlForegroundBaseLowBrush}"
+                    BorderThickness="1">
+                <StackPanel>
+                    <TextBlock Text="🔐 ยืนยัน PIN"
+                             FontSize="20"
+                             FontWeight="SemiBold"
+                             Margin="0,0,0,16"/>
+
+                    <TextBlock Text="{Binding PinMessage}"
+                             TextWrapping="Wrap"
+                             Margin="0,0,0,16"
+                             HorizontalAlignment="Center"/>
+
+                    <ui:PasswordBox Password="{Binding PinInput, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                  MaxLength="4"
+                                  Margin="0,0,0,16"
+                                  PlaceholderText="ใส่ PIN 4 หลัก"
+                                  FontSize="16"
+                                  HorizontalAlignment="Stretch"/>
+
+                    <UniformGrid Rows="1" Columns="2">
+                        <Button Content="ยกเลิก"
+                              Command="{Binding ClosePinDialogCommand}"
+                              Margin="0,0,8,0"
+                              Padding="16,8"/>
+                        <Button Content="ยืนยัน"
+                              Command="{Binding VerifyPinCommand}"
+                              Style="{StaticResource AccentButtonStyle}"
+                              Margin="8,0,0,0"
+                              Padding="16,8"/>
+                    </UniformGrid>
+
+                    <TextBlock Text="{Binding RemainingPinAttempts, StringFormat='เหลือความพยายาม: {0} ครั้ง'}"
+                             Visibility="{Binding RemainingPinAttempts, Converter={StaticResource BoolToVis}}"
+                             HorizontalAlignment="Center"
+                             Margin="0,12,0,0"
+                             Foreground="#FF6B6B"
+                             FontSize="12"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Grid>
+</ui:Window>
